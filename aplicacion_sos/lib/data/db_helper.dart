@@ -1,48 +1,53 @@
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 import 'categorias_iniciales.dart';
-import 'db_factory_stub.dart' if (dart.library.io) 'db_factory_io.dart';
 
 /// Punto único de acceso a la base de datos SQLite de la app.
+///
+/// La inicialización se guarda como una única [Future] compartida para que,
+/// aunque varios BLoCs pidan la base al mismo tiempo (p. ej. al arrancar),
+/// la apertura y el sembrado de categorías se ejecuten una sola vez.
+/// Esto evita dos problemas reales: que la vista de Ajustes se quede
+/// detenida esperando un candado por aperturas concurrentes, y que las
+/// categorías iniciales se inserten por duplicado.
 class DatabaseHelper {
   DatabaseHelper._();
 
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _nombreDb = 'gestor_financiero.db';
-  static const _version = 1;
+  static const _version = 2;
 
-  Database? _db;
-  bool _sembrado = false;
+  Future<Database>? _dbFuture;
 
-  Future<Database> get database async {
-    if (_db != null) return _db!;
-    _db = await _abrir();
-    if (!_sembrado) {
-      await _sembrarCategoriasIniciales(_db!);
-      _sembrado = true;
+  Future<Database> get database => _dbFuture ??= _inicializarConReintento();
+
+  /// Si la apertura falla, se descarta la [Future] memoizada para que el
+  /// siguiente acceso pueda reintentar.
+  Future<Database> _inicializarConReintento() async {
+    try {
+      return await _inicializar();
+    } catch (_) {
+      _dbFuture = null;
+      rethrow;
     }
-    return _db!;
+  }
+
+  Future<Database> _inicializar() async {
+    final db = await _abrir();
+    await _sembrarCategoriasIniciales(db);
+    return db;
   }
 
   Future<Database> _abrir() async {
-    // En escritorio (Windows/Linux/macOS) sqflite necesita el adaptador FFI.
-    final esEscritorio = !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.windows ||
-            defaultTargetPlatform == TargetPlatform.linux ||
-            defaultTargetPlatform == TargetPlatform.macOS);
-    if (esEscritorio) {
-      configurarFactoryEscritorio();
-    }
-
     final ruta = p.join(await getDatabasesPath(), _nombreDb);
     return openDatabase(
       ruta,
       version: _version,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _crearEsquema,
+      onUpgrade: _actualizarEsquema,
     );
   }
 
@@ -68,6 +73,59 @@ class DatabaseHelper {
         FOREIGN KEY(categoria_id) REFERENCES categorias(id) ON DELETE SET NULL
       )
     ''');
+    await _crearIndiceUnicoCategorias(db);
+  }
+
+  Future<void> _actualizarEsquema(
+    Database db,
+    int versionAnterior,
+    int versionNueva,
+  ) async {
+    if (versionAnterior < 2) {
+      // Limpia las categorías duplicadas que pudieron quedar por versiones
+      // anteriores y evita que vuelvan a aparecer con un índice único.
+      await _deduplicarCategorias(db);
+      await _crearIndiceUnicoCategorias(db);
+    }
+  }
+
+  Future<void> _crearIndiceUnicoCategorias(Database db) async {
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_categorias_nombre_tipo '
+      'ON categorias(nombre COLLATE NOCASE, tipo)',
+    );
+  }
+
+  /// Conserva una sola categoría por (nombre, tipo) sin importar mayúsculas:
+  /// reasigna sus movimientos a la categoría que se conserva (la de menor id)
+  /// y elimina el resto de duplicados.
+  Future<void> _deduplicarCategorias(Database db) async {
+    final grupos = await db.rawQuery('''
+      SELECT LOWER(nombre) AS nombre, tipo, MIN(id) AS conservada,
+             GROUP_CONCAT(id) AS ids
+      FROM categorias
+      GROUP BY LOWER(nombre), tipo
+      HAVING COUNT(*) > 1
+    ''');
+
+    for (final grupo in grupos) {
+      final conservada = grupo['conservada'] as int;
+      final ids = (grupo['ids'] as String).split(',').map(int.parse).toList();
+      final descartadas = ids.where((i) => i != conservada).toList();
+      final marcadores = List.filled(descartadas.length, '?').join(',');
+
+      await db.update(
+        'movimientos',
+        {'categoria_id': conservada},
+        where: 'categoria_id IN ($marcadores)',
+        whereArgs: descartadas,
+      );
+      await db.delete(
+        'categorias',
+        where: 'id IN ($marcadores)',
+        whereArgs: descartadas,
+      );
+    }
   }
 
   Future<void> _sembrarCategoriasIniciales(Database db) async {
@@ -79,7 +137,11 @@ class DatabaseHelper {
 
     final batch = db.batch();
     for (final categoria in categoriasIniciales) {
-      batch.insert('categorias', categoria.toMap());
+      batch.insert(
+        'categorias',
+        categoria.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
     }
     await batch.commit(noResult: true);
   }

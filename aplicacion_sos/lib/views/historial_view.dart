@@ -10,7 +10,8 @@ import '../utils/formato_moneda.dart';
 
 enum _FiltroHistorial { todos, gasto, ahorro }
 
-/// Vista de historial: movimientos agrupados por día, con filtros y borrado.
+/// Vista de historial: movimientos agrupados por día, con filtros, fecha de
+/// registro y borrado por deslizamiento o menú contextual.
 class HistorialView extends StatefulWidget {
   const HistorialView({super.key});
 
@@ -20,6 +21,10 @@ class HistorialView extends StatefulWidget {
 
 class _HistorialViewState extends State<HistorialView> {
   _FiltroHistorial _filtro = _FiltroHistorial.todos;
+
+  /// Movimientos que ya se deslizaron y esperan a que el BLoC recargue la
+  /// lista; evita que un elemento eliminado reaparezca antes de la recarga.
+  final Set<int> _pendientesEliminar = {};
 
   void _cambiarFiltro(_FiltroHistorial nuevo) {
     if (nuevo == _filtro) return;
@@ -32,34 +37,15 @@ class _HistorialViewState extends State<HistorialView> {
     context.read<MovimientosBloc>().add(FiltrarPorTipo(tipo));
   }
 
-  void _mostrarOpciones(BuildContext contexto, Movimiento mov) {
-    showModalBottomSheet<void>(
-      context: contexto,
-      showDragHandle: true,
-      builder: (hoja) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(
-                Icons.delete_outline_rounded,
-                color: Theme.of(hoja).colorScheme.error,
-              ),
-              title: const Text('Eliminar movimiento'),
-              subtitle: Text('Se quitará del historial y del balance'),
-              onTap: () {
-                Navigator.pop(hoja);
-                _confirmarEliminar(contexto, mov);
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
+  void _eliminarMovimiento(Movimiento mov) {
+    final id = mov.id;
+    if (id == null) return;
+    setState(() => _pendientesEliminar.add(id));
+    context.read<MovimientosBloc>().add(EliminarMovimiento(id));
   }
 
-  Future<void> _confirmarEliminar(BuildContext contexto, Movimiento mov) async {
+  /// Muestra el diálogo de confirmación y devuelve si el usuario confirmó.
+  Future<bool> _confirmarEliminar(BuildContext contexto, Movimiento mov) async {
     final confirmado = await showDialog<bool>(
       context: contexto,
       builder: (dialogo) => AlertDialog(
@@ -80,9 +66,37 @@ class _HistorialViewState extends State<HistorialView> {
         ],
       ),
     );
-    if (confirmado == true && contexto.mounted) {
-      contexto.read<MovimientosBloc>().add(EliminarMovimiento(mov.id!));
-    }
+    return confirmado == true;
+  }
+
+  void _mostrarOpciones(BuildContext contexto, Movimiento mov) {
+    showModalBottomSheet<void>(
+      context: contexto,
+      showDragHandle: true,
+      builder: (hoja) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline_rounded,
+                color: Theme.of(hoja).colorScheme.error,
+              ),
+              title: const Text('Eliminar movimiento'),
+              subtitle: Text('Se quitará del historial y del balance'),
+              onTap: () async {
+                Navigator.pop(hoja);
+                final confirmado = await _confirmarEliminar(contexto, mov);
+                if (confirmado && contexto.mounted) {
+                  _eliminarMovimiento(mov);
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   String _etiquetaDia(DateTime f) {
@@ -92,11 +106,15 @@ class _HistorialViewState extends State<HistorialView> {
         a.year == b.year && a.month == b.month && a.day == b.day;
     if (mismaFecha(f, hoy)) return 'Hoy';
     if (mismaFecha(f, ayer)) return 'Ayer';
-    final texto = DateFormat('EEEE, d \'de\' MMMM', 'es').format(f);
+    final texto = DateFormat("EEEE, d 'de' MMMM", 'es').format(f);
     return texto[0].toUpperCase() + texto.substring(1);
   }
 
-  Widget _itemMovimiento(BuildContext contexto, Movimiento m, Categoria? categoria) {
+  Widget _itemMovimiento(
+    BuildContext contexto,
+    Movimiento m,
+    Categoria? categoria,
+  ) {
     final esAhorro = m.tipo == TipoMovimiento.ahorro;
     final color = categoria?.color ??
         (esAhorro ? const Color(0xFF10B981) : const Color(0xFFEF4444));
@@ -105,30 +123,68 @@ class _HistorialViewState extends State<HistorialView> {
     final colorMonto =
         esAhorro ? const Color(0xFF10B981) : Theme.of(contexto).colorScheme.error;
     final tieneComentario = m.comentario != null && m.comentario!.isNotEmpty;
+    final fechaTexto = DateFormat('d MMM, HH:mm', 'es').format(m.fecha);
 
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: color.withValues(alpha: 0.15),
-        child: Icon(icono, color: color),
-      ),
-      title: Text(
-        categoria?.nombre ?? 'Sin categoría',
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-      ),
-      subtitle: Text(
-        tieneComentario ? m.comentario! : DateFormat('HH:mm', 'es').format(m.fecha),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 13,
-          color: Theme.of(contexto).colorScheme.onSurfaceVariant,
+    final tile = ListTile(
+        leading: CircleAvatar(
+          backgroundColor: color.withValues(alpha: 0.15),
+          child: Icon(icono, color: color),
         ),
+        title: Text(
+          categoria?.nombre ?? 'Sin categoría',
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              fechaTexto,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(contexto).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (tieneComentario)
+              Text(
+                m.comentario!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(contexto).colorScheme.outline,
+                ),
+              ),
+          ],
+        ),
+        trailing: Text(
+          '${esAhorro ? '+' : '−'}${formatoMoneda(m.monto)}',
+          style: TextStyle(
+            color: colorMonto,
+            fontWeight: FontWeight.w700,
+            fontSize: 15,
+          ),
+        ),
+        onLongPress: () => _mostrarOpciones(contexto, m),
+      );
+    // Un movimiento sin id no se puede borrar ni eliminar de forma segura;
+    // se muestra sin acciones de deslizamiento.
+    if (m.id == null) return tile;
+    return Dismissible(
+      key: ValueKey('movimiento-${m.id}'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 24),
+        decoration: BoxDecoration(
+          color: Theme.of(contexto).colorScheme.error,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
       ),
-      trailing: Text(
-        '${esAhorro ? '+' : '−'}${formatoMoneda(m.monto)}',
-        style: TextStyle(color: colorMonto, fontWeight: FontWeight.w700, fontSize: 15),
-      ),
-      onLongPress: () => _mostrarOpciones(contexto, m),
+      confirmDismiss: (_) => _confirmarEliminar(contexto, m),
+      onDismissed: (_) => _eliminarMovimiento(m),
+      child: tile,
     );
   }
 
@@ -139,6 +195,7 @@ class _HistorialViewState extends State<HistorialView> {
   ) {
     final porDia = <DateTime, List<Movimiento>>{};
     for (final m in movimientos) {
+      if (m.id != null && _pendientesEliminar.contains(m.id)) continue;
       final clave = DateTime(m.fecha.year, m.fecha.month, m.fecha.day);
       porDia.putIfAbsent(clave, () => []).add(m);
     }
@@ -170,7 +227,11 @@ class _HistorialViewState extends State<HistorialView> {
                 children: [
                   for (var j = 0; j < entrada.value.length; j++) ...[
                     if (j > 0) const Divider(height: 1, indent: 16, endIndent: 16),
-                    _itemMovimiento(contexto, entrada.value[j], categorias[entrada.value[j].categoriaId]),
+                    _itemMovimiento(
+                      contexto,
+                      entrada.value[j],
+                      categorias[entrada.value[j].categoriaId],
+                    ),
                   ],
                 ],
               ),
@@ -203,7 +264,18 @@ class _HistorialViewState extends State<HistorialView> {
           const SizedBox(height: 4),
           Text(
             'Registra tu primer gasto o ahorro',
-            style: TextStyle(fontSize: 13, color: Theme.of(contexto).colorScheme.outline),
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(contexto).colorScheme.outline,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Desliza un movimiento a la izquierda para eliminarlo',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(contexto).colorScheme.outline,
+            ),
           ),
         ],
       ),
@@ -251,6 +323,12 @@ class _HistorialViewState extends State<HistorialView> {
           Expanded(
             child: BlocBuilder<MovimientosBloc, MovimientosState>(
               builder: (contexto, estado) {
+                // Descarta de la lista de pendientes los movimientos que el
+                // BLoC ya dejó de incluir tras recargar.
+                if (_pendientesEliminar.isNotEmpty) {
+                  final vivos = estado.movimientos.map((m) => m.id).toSet();
+                  _pendientesEliminar.removeWhere((id) => !vivos.contains(id));
+                }
                 if (estado.cargando && estado.movimientos.isEmpty) {
                   return const Center(child: CircularProgressIndicator());
                 }

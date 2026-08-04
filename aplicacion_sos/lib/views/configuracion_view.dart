@@ -321,6 +321,32 @@ class _DialogoCategoriaState extends State<DialogoCategoria> {
     );
   }
 
+  Widget _itemIcono(BuildContext contexto, int codigo, Color color, ColorScheme esquema) {
+    final seleccionado = _iconoCodePoint == codigo;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => setState(() => _iconoCodePoint = codigo),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 52,
+        decoration: BoxDecoration(
+          color: seleccionado
+              ? color.withValues(alpha: 0.15)
+              : esquema.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: seleccionado ? color : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: Icon(
+          IconData(codigo, fontFamily: 'MaterialIcons'),
+          color: seleccionado ? color : esquema.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final esquema = Theme.of(context).colorScheme;
@@ -362,38 +388,20 @@ class _DialogoCategoriaState extends State<DialogoCategoria> {
               ),
             ),
             const SizedBox(height: 8),
+            // Un ListView horizontal no soporta dimensiones intrínsecas dentro
+            // del diálogo y provoca un error de layout; se usa un scroll simple.
             SizedBox(
               height: 64,
-              child: ListView.separated(
+              child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                itemCount: codigosIconosCategoria.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (contexto, i) {
-                  final codigo = codigosIconosCategoria[i];
-                  final seleccionado = _iconoCodePoint == codigo;
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    onTap: () => setState(() => _iconoCodePoint = codigo),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      width: 52,
-                      decoration: BoxDecoration(
-                        color: seleccionado
-                            ? _color.withValues(alpha: 0.15)
-                            : esquema.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: seleccionado ? _color : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                      child: Icon(
-                        IconData(codigo, fontFamily: 'MaterialIcons'),
-                        color: seleccionado ? _color : esquema.onSurfaceVariant,
-                      ),
-                    ),
-                  );
-                },
+                child: Row(
+                  children: [
+                    for (var i = 0; i < codigosIconosCategoria.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      _itemIcono(context, codigosIconosCategoria[i], _color, esquema),
+                    ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
