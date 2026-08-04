@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:aplicacion_sos/View_Inicio.dart';
-void main(){
-  runApp(Myapp());
-}
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class Myapp extends StatelessWidget {
+import 'app.dart';
 
-  
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: "Gestor Financiero",
-      home: ViewInicio()
-    );
-  }
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
+  // Habilita el formato de fechas en español (meses, días de la semana).
+  await initializeDateFormatting('es');
 
+  final prefs = await SharedPreferences.getInstance();
+  final temaGuardado = prefs.getString('tema');
+  final temaInicial =
+      temaGuardado == ThemeMode.dark.name ? ThemeMode.dark : ThemeMode.light;
+
+  runApp(GestorApp(temaInicial: temaInicial, prefs: prefs));
 }
