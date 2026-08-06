@@ -84,8 +84,11 @@ class MovimientosBloc extends Bloc<MovimientosEvent, MovimientosState> {
   final MovimientoRepository _repo;
 
   Future<void> _recargar(Emitter<MovimientosState> emit) async {
-    final resumen = await _repo.resumenDelMes(DateTime.now());
-    final movimientos = await _repo.listar(tipo: state.filtro);
+    // El resumen y el historial son independientes: se consultan en paralelo.
+    final (resumen, movimientos) = await (
+      _repo.resumenDelMes(DateTime.now()),
+      _repo.listar(tipo: state.filtro),
+    ).wait;
     emit(state.copyWith(
       cargando: false,
       resumen: resumen,
@@ -110,9 +113,27 @@ class MovimientosBloc extends Bloc<MovimientosEvent, MovimientosState> {
     Emitter<MovimientosState> emit,
   ) async {
     try {
-      await _repo.registrar(evento.movimiento);
-      await _recargar(emit);
-      emit(state.copyWith(mensaje: '${evento.movimiento.tipo.nombre} registrado ✓'));
+      final id = await _repo.registrar(evento.movimiento);
+      // El movimiento recién guardado es el más reciente: se inserta al frente
+      // de la lista en memoria y solo se recalcula el resumen, sin volver a
+      // leer el historial completo de la base de datos.
+      final resumen = await _repo.resumenDelMes(DateTime.now());
+      final nuevo = Movimiento(
+        id: id,
+        tipo: evento.movimiento.tipo,
+        monto: evento.movimiento.monto,
+        categoriaId: evento.movimiento.categoriaId,
+        comentario: evento.movimiento.comentario,
+        fecha: evento.movimiento.fecha,
+      );
+      // Si el filtro activo excluye el nuevo movimiento, no se agrega a la
+      // vista; la próxima consulta del filtro lo mostrará desde la BD.
+      final coincide = state.filtro == null || state.filtro == nuevo.tipo;
+      emit(state.copyWith(
+        resumen: resumen,
+        movimientos: coincide ? [nuevo, ...state.movimientos] : state.movimientos,
+        mensaje: '${evento.movimiento.tipo.nombre} registrado ✓',
+      ));
     } catch (_) {
       emit(state.copyWith(mensaje: 'No se pudo registrar el movimiento'));
     }
@@ -124,8 +145,15 @@ class MovimientosBloc extends Bloc<MovimientosEvent, MovimientosState> {
   ) async {
     try {
       await _repo.eliminar(evento.id);
-      await _recargar(emit);
-      emit(state.copyWith(mensaje: 'Movimiento eliminado'));
+      // Se quita de la lista en memoria y solo se recalcula el resumen, sin
+      // releer el historial completo.
+      final resumen = await _repo.resumenDelMes(DateTime.now());
+      emit(state.copyWith(
+        resumen: resumen,
+        movimientos:
+            state.movimientos.where((m) => m.id != evento.id).toList(),
+        mensaje: 'Movimiento eliminado',
+      ));
     } catch (_) {
       emit(state.copyWith(mensaje: 'No se pudo eliminar el movimiento'));
     }

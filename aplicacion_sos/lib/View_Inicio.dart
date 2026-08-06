@@ -143,32 +143,21 @@ class _ViewInicioState extends State<ViewInicio> {
 
   Widget _encabezado() {
     final esquema = Theme.of(context).colorScheme;
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Hola 👋',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: esquema.onSurface,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Tu resumen de ${formatoMes(DateTime.now())}',
-                style: TextStyle(fontSize: 14, color: esquema.onSurfaceVariant),
-              ),
-            ],
+        Text(
+          'Hola 👋',
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            color: esquema.onSurface,
           ),
         ),
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: esquema.primaryContainer,
-          child: Icon(Icons.person_rounded, color: esquema.onPrimaryContainer),
+        const SizedBox(height: 2),
+        Text(
+          'Tu resumen de ${formatoMes(DateTime.now())}',
+          style: TextStyle(fontSize: 14, color: esquema.onSurfaceVariant),
         ),
       ],
     );

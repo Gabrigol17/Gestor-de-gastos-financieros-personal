@@ -17,7 +17,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _nombreDb = 'gestor_financiero.db';
-  static const _version = 2;
+  static const _version = 3;
 
   Future<Database>? _dbFuture;
 
@@ -74,6 +74,7 @@ class DatabaseHelper {
       )
     ''');
     await _crearIndiceUnicoCategorias(db);
+    await _crearIndicesMovimientos(db);
   }
 
   Future<void> _actualizarEsquema(
@@ -87,12 +88,30 @@ class DatabaseHelper {
       await _deduplicarCategorias(db);
       await _crearIndiceUnicoCategorias(db);
     }
+    if (versionAnterior < 3) {
+      // Acelera el resumen mensual y el historial a medida que crece la tabla
+      // de movimientos. Solo crea índices; no altera ningún dato existente.
+      await _crearIndicesMovimientos(db);
+    }
   }
 
   Future<void> _crearIndiceUnicoCategorias(Database db) async {
     await db.execute(
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_categorias_nombre_tipo '
       'ON categorias(nombre COLLATE NOCASE, tipo)',
+    );
+  }
+
+  /// Índices para las consultas más frecuentes sobre movimientos: el resumen
+  /// mensual filtra por rango de [fecha] y el historial ordena por ella;
+  /// [categoria_id] acelera la unión con la tabla de categorías.
+  Future<void> _crearIndicesMovimientos(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_movimientos_fecha ON movimientos(fecha)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_movimientos_categoria_id '
+      'ON movimientos(categoria_id)',
     );
   }
 

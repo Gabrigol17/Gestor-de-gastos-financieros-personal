@@ -80,11 +80,6 @@ class TarjetaBalance extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'Los ahorros del mes suman a "Recibido" y los gastos a "Gastado".',
-            style: TextStyle(color: Colors.white70, fontSize: 11),
-          ),
         ],
       ),
     );
@@ -105,17 +100,25 @@ class TarjetaBalance extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 etiqueta,
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            formatoMoneda(monto),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+          // Escala el monto si es muy largo para que nunca se desborde.
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                formatoMoneda(monto),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ),
         ],

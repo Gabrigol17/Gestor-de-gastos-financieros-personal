@@ -108,5 +108,15 @@ void main() {
       }),
       throwsA(isA<DatabaseException>()),
     );
+
+    // La migración v3 crea los índices que aceleran el resumen y el historial
+    // sin alterar los datos existentes.
+    final indices = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_movimientos_%'",
+    );
+    expect(
+      indices.map((i) => i['name']),
+      containsAll(['idx_movimientos_fecha', 'idx_movimientos_categoria_id']),
+    );
   });
 }

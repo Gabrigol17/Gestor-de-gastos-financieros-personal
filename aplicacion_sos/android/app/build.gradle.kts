@@ -35,6 +35,10 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Reduce el tamaño del APK de release: R8 elimina el código
+            // Java/Kotlin no usado y el shrinker descarta recursos huérfanos.
+            isMinifyEnabled = true
+            isShrinkResources = true
         }
     }
 }

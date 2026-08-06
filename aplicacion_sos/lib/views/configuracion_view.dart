@@ -272,7 +272,7 @@ class ConfiguracionView extends StatelessWidget {
               const ListTile(
                 leading: Icon(Icons.info_outline_rounded),
                 title: Text('Versión'),
-                subtitle: Text('1.0.0'),
+                subtitle: Text('1.2.0'),
               ),
             ],
           ),
@@ -340,7 +340,7 @@ class _DialogoCategoriaState extends State<DialogoCategoria> {
           ),
         ),
         child: Icon(
-          IconData(codigo, fontFamily: 'MaterialIcons'),
+          iconosCategoria[codigo] ?? Icons.category,
           color: seleccionado ? color : esquema.onSurfaceVariant,
         ),
       ),
