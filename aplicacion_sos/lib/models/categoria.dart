@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../utils/constantes.dart';
 import 'movimiento.dart';
 
 /// Categoría creada por el usuario para clasificar sus gastos o ahorros.
@@ -24,7 +25,9 @@ class Categoria {
 
   Color get color => Color(colorValue);
 
-  IconData get icono => IconData(iconoCodePoint, fontFamily: 'MaterialIcons');
+  /// Resuelve el icono desde el código guardado. Al ser una instancia
+  /// constante, no impide el tree-shake de iconos en builds de release.
+  IconData get icono => iconosCategoria[iconoCodePoint] ?? Icons.category;
 
   Map<String, Object?> toMap() => {
         if (id != null) 'id': id,

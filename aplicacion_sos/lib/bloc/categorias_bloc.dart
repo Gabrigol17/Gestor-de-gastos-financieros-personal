@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:sqflite/sqflite.dart' show DatabaseException;
 
 import '../data/categoria_repository.dart';
 import '../models/categoria.dart';
@@ -87,6 +88,12 @@ class CategoriasBloc extends Bloc<CategoriasEvent, CategoriasState> {
         categorias: categorias,
         mensaje: 'Categoría "${evento.categoria.nombre}" creada',
       ));
+    } on DatabaseException catch (e) {
+      // El índice único impide duplicar (nombre, tipo); se avisa al usuario.
+      final mensaje = e.isUniqueConstraintError()
+          ? 'Ya existe una categoría "${evento.categoria.nombre}" con ese tipo'
+          : 'No se pudo crear la categoría';
+      emit(state.copyWith(mensaje: mensaje));
     } catch (_) {
       emit(state.copyWith(mensaje: 'No se pudo crear la categoría'));
     }

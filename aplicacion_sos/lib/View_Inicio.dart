@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 
 import 'bloc/categorias_bloc.dart';
 import 'bloc/movimientos_bloc.dart';
@@ -12,7 +13,7 @@ import 'utils/formato_moneda.dart';
 import 'widgets/tarjeta_balance.dart';
 import 'widgets/teclado_numerico.dart';
 
-/// Vista inicial: balance del mes y registro rápido de gastos o ahorros.
+/// Vista inicial: balance del mes y registro rápido de gastos o ingresos.
 class ViewInicio extends StatefulWidget {
   const ViewInicio({super.key});
 
@@ -26,9 +27,16 @@ class _ViewInicioState extends State<ViewInicio> {
   String _monto = '';
   TipoMovimiento _tipo = TipoMovimiento.gasto;
   int? _categoriaId;
+  DateTime _fechaRegistro = DateTime.now();
   final _controladorComentario = TextEditingController();
 
   double? get _montoParseado => double.tryParse(_monto);
+
+  /// `true` cuando la fecha seleccionada NO es hoy.
+  bool get _esFechaPasada =>
+      _fechaRegistro.year != DateTime.now().year ||
+      _fechaRegistro.month != DateTime.now().month ||
+      _fechaRegistro.day != DateTime.now().day;
 
   @override
   void dispose() {
@@ -64,6 +72,18 @@ class _ViewInicioState extends State<ViewInicio> {
     });
   }
 
+  /// Devuelve la primera categoría disponible para el [_tipo] actual,
+  /// o `null` si no hay ninguna (caso extremo).
+  int? _primeraCategoriaDelTipo() {
+    final cats = context
+        .read<CategoriasBloc>()
+        .state
+        .categorias
+        .where((c) => c.tipo == _tipo)
+        .toList();
+    return cats.isNotEmpty ? cats.first.id : null;
+  }
+
   void _registrar() {
     final monto = _montoParseado;
     if (monto == null || monto <= 0) {
@@ -71,21 +91,35 @@ class _ViewInicioState extends State<ViewInicio> {
       return;
     }
     final comentario = _controladorComentario.text.trim();
+    // Nunca guardar sin categoría: si el usuario no eligió, usar la primera.
+    final categoriaId = _categoriaId ?? _primeraCategoriaDelTipo();
+    // Combinar la fecha seleccionada con la hora actual para保持 la hora real.
+    final ahora = DateTime.now();
+    final fecha = DateTime(
+      _fechaRegistro.year,
+      _fechaRegistro.month,
+      _fechaRegistro.day,
+      ahora.hour,
+      ahora.minute,
+      ahora.second,
+    );
     context.read<MovimientosBloc>().add(
           RegistrarMovimiento(
             Movimiento(
               tipo: _tipo,
               monto: monto,
-              categoriaId: _categoriaId,
+              categoriaId: categoriaId,
               comentario: comentario.isEmpty ? null : comentario,
-              fecha: DateTime.now(),
+              fecha: fecha,
             ),
           ),
         );
     setState(() {
       _monto = '';
-      _categoriaId = null;
+      // Dejar preseleccionada la categoría usada para el próximo registro.
+      _categoriaId = categoriaId;
       _controladorComentario.clear();
+      _fechaRegistro = DateTime.now();
     });
   }
 
@@ -93,6 +127,34 @@ class _ViewInicioState extends State<ViewInicio> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(texto)));
+  }
+
+  Future<void> _seleccionarFecha() async {
+    final hoy = DateTime.now();
+    final seleccionada = await showDatePicker(
+      context: context,
+      initialDate: _fechaRegistro,
+      firstDate: DateTime(hoy.year - 1, 1, 1),
+      lastDate: hoy,
+      locale: const Locale('es'),
+      helpText: 'Selecciona la fecha del gasto',
+      cancelText: 'Cancelar',
+      confirmText: 'OK',
+    );
+    if (seleccionada != null) {
+      setState(() => _fechaRegistro = seleccionada);
+    }
+  }
+
+  String _etiquetaFecha() {
+    final hoy = DateTime.now();
+    final f = _fechaRegistro;
+    bool mismaFecha(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
+    if (mismaFecha(f, hoy)) return 'Hoy';
+    final ayer = hoy.subtract(const Duration(days: 1));
+    if (mismaFecha(f, ayer)) return 'Ayer';
+    return DateFormat("d 'de' MMMM, yyyy", 'es').format(f);
   }
 
   @override
@@ -133,6 +195,8 @@ class _ViewInicioState extends State<ViewInicio> {
           const SizedBox(height: 20),
           _selectorCategorias(categoriasDelTipo, categoriaSeleccionada),
           const SizedBox(height: 12),
+          _selectorFecha(),
+          const SizedBox(height: 12),
           _campoComentario(),
           const SizedBox(height: 20),
           _botonRegistrar(),
@@ -143,32 +207,21 @@ class _ViewInicioState extends State<ViewInicio> {
 
   Widget _encabezado() {
     final esquema = Theme.of(context).colorScheme;
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Hola 👋',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: esquema.onSurface,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Tu resumen de ${formatoMes(DateTime.now())}',
-                style: TextStyle(fontSize: 14, color: esquema.onSurfaceVariant),
-              ),
-            ],
+        Text(
+          'Hola 👋',
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            color: esquema.onSurface,
           ),
         ),
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: esquema.primaryContainer,
-          child: Icon(Icons.person_rounded, color: esquema.onPrimaryContainer),
+        const SizedBox(height: 2),
+        Text(
+          'Tu resumen de ${formatoMes(DateTime.now())}',
+          style: TextStyle(fontSize: 14, color: esquema.onSurfaceVariant),
         ),
       ],
     );
@@ -182,7 +235,7 @@ class _ViewInicioState extends State<ViewInicio> {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _botonTipo(TipoMovimiento.ahorro, Icons.savings_rounded, 'Ahorro'),
+          child: _botonTipo(TipoMovimiento.ahorro, Icons.savings_rounded, 'Ingresos'),
         ),
       ],
     );
@@ -197,10 +250,18 @@ class _ViewInicioState extends State<ViewInicio> {
 
     return InkWell(
       borderRadius: BorderRadius.circular(18),
-      onTap: () => setState(() {
-        _tipo = tipo;
-        _categoriaId = null;
-      }),
+      onTap: () {
+        final cats = context
+            .read<CategoriasBloc>()
+            .state
+            .categorias
+            .where((c) => c.tipo == tipo)
+            .toList();
+        setState(() {
+          _tipo = tipo;
+          _categoriaId = cats.isNotEmpty ? cats.first.id : null;
+        });
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -326,6 +387,73 @@ class _ViewInicioState extends State<ViewInicio> {
     );
   }
 
+  Widget _selectorFecha() {
+    final esquema = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Fecha',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: esquema.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: _seleccionarFecha,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: _esFechaPasada
+                  ? const Color(0xFFF59E0B).withValues(alpha: 0.12)
+                  : esquema.surfaceContainerLow,
+              border: Border.all(
+                color: _esFechaPasada
+                    ? const Color(0xFFF59E0B)
+                    : esquema.outlineVariant,
+                width: _esFechaPasada ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.calendar_today_rounded,
+                  size: 18,
+                  color: _esFechaPasada
+                      ? const Color(0xFFF59E0B)
+                      : esquema.onSurfaceVariant,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  _etiquetaFecha(),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _esFechaPasada
+                        ? const Color(0xFFF59E0B)
+                        : esquema.onSurface,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  Icons.edit_calendar_rounded,
+                  size: 18,
+                  color: esquema.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _campoComentario() {
     return TextField(
       controller: _controladorComentario,
@@ -346,8 +474,13 @@ class _ViewInicioState extends State<ViewInicio> {
   }
 
   Widget _botonRegistrar() {
-    final esAhorro = _tipo == TipoMovimiento.ahorro;
-    final color = esAhorro ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final esIngreso = _tipo == TipoMovimiento.ahorro;
+    final color = esIngreso ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final texto = _esFechaPasada
+        ? 'Registrar ${esIngreso ? 'ingreso' : 'gasto'} del ${_etiquetaFecha().toLowerCase()}'
+        : esIngreso
+            ? 'Registrar ingreso'
+            : 'Registrar gasto';
     return FilledButton(
       style: FilledButton.styleFrom(
         backgroundColor: color,
@@ -357,7 +490,7 @@ class _ViewInicioState extends State<ViewInicio> {
         textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
       ),
       onPressed: _registrar,
-      child: Text(esAhorro ? 'Registrar ahorro' : 'Registrar gasto'),
+      child: Text(texto),
     );
   }
 }
