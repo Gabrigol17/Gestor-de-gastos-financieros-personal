@@ -184,7 +184,7 @@ class ConfiguracionView extends StatelessWidget {
               children: [
                 _bloqueCategorias(contexto, TipoMovimiento.gasto, 'Gastos', categorias),
                 const SizedBox(height: 8),
-                _bloqueCategorias(contexto, TipoMovimiento.ahorro, 'Ahorros', categorias),
+                _bloqueCategorias(contexto, TipoMovimiento.ahorro, 'Ingresos', categorias),
               ],
             );
           },
@@ -272,7 +272,7 @@ class ConfiguracionView extends StatelessWidget {
               const ListTile(
                 leading: Icon(Icons.info_outline_rounded),
                 title: Text('Versión'),
-                subtitle: Text('1.2.0'),
+                subtitle: Text('2.0.1'),
               ),
             ],
           ),
@@ -361,7 +361,7 @@ class _DialogoCategoriaState extends State<DialogoCategoria> {
             SegmentedButton<TipoMovimiento>(
               segments: const [
                 ButtonSegment(value: TipoMovimiento.gasto, label: Text('Gasto')),
-                ButtonSegment(value: TipoMovimiento.ahorro, label: Text('Ahorro')),
+                ButtonSegment(value: TipoMovimiento.ahorro, label: Text('Ingreso')),
               ],
               selected: {_tipo},
               onSelectionChanged: (s) => setState(() => _tipo = s.first),

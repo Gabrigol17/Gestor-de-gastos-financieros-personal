@@ -17,7 +17,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _nombreDb = 'gestor_financiero.db';
-  static const _version = 3;
+  static const _version = 4;
 
   Future<Database>? _dbFuture;
 
@@ -70,6 +70,8 @@ class DatabaseHelper {
         categoria_id INTEGER,
         comentario TEXT,
         fecha TEXT NOT NULL,
+        medio_pago TEXT NOT NULL DEFAULT 'efectivo',
+        banco TEXT,
         FOREIGN KEY(categoria_id) REFERENCES categorias(id) ON DELETE SET NULL
       )
     ''');
@@ -92,6 +94,16 @@ class DatabaseHelper {
       // Acelera el resumen mensual y el historial a medida que crece la tabla
       // de movimientos. Solo crea índices; no altera ningún dato existente.
       await _crearIndicesMovimientos(db);
+    }
+    if (versionAnterior < 4) {
+      // Agrega soporte para medio de pago (efectivo / transferencia) y banco.
+      // Los registros existentes quedan como 'efectivo' por defecto.
+      await db.execute(
+        "ALTER TABLE movimientos ADD COLUMN medio_pago TEXT NOT NULL DEFAULT 'efectivo'",
+      );
+      await db.execute(
+        'ALTER TABLE movimientos ADD COLUMN banco TEXT',
+      );
     }
   }
 

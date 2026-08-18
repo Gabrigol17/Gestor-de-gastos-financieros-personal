@@ -5,7 +5,7 @@ enum TipoMovimiento {
 
   String get nombre => switch (this) {
         TipoMovimiento.gasto => 'Gasto',
-        TipoMovimiento.ahorro => 'Ahorro',
+        TipoMovimiento.ahorro => 'Ingresos',
       };
 
   /// Valor que se guarda en la base de datos.
@@ -17,8 +17,8 @@ enum TipoMovimiento {
 
 /// Resumen de movimientos del mes actual.
 ///
-/// Como la app solo registra gastos y ahorros, el monto "recibido" del mes
-/// corresponde a la suma de los ahorros y el "gastado" a la suma de gastos.
+/// Como la app solo registra gastos e ingresos, el monto "recibido" del mes
+/// corresponde a la suma de los ingresos y el "gastado" a la suma de gastos.
 class ResumenMes {
   final double recibido;
   final double gastado;
@@ -28,7 +28,7 @@ class ResumenMes {
   double get balance => recibido - gastado;
 }
 
-/// Un movimiento de gasto o ahorro registrado por el usuario.
+/// Un movimiento de gasto o ingreso registrado por el usuario.
 class Movimiento {
   final int? id;
   final TipoMovimiento tipo;

@@ -263,7 +263,7 @@ class _HistorialViewState extends State<HistorialView> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Registra tu primer gasto o ahorro',
+            'Registra tu primer gasto o ingreso',
             style: TextStyle(
               fontSize: 13,
               color: Theme.of(contexto).colorScheme.outline,
@@ -313,7 +313,7 @@ class _HistorialViewState extends State<HistorialView> {
                   icon: Icon(Icons.list_rounded),
                 ),
                 ButtonSegment(value: _FiltroHistorial.gasto, label: Text('Gastos')),
-                ButtonSegment(value: _FiltroHistorial.ahorro, label: Text('Ahorros')),
+                ButtonSegment(value: _FiltroHistorial.ahorro, label: Text('Ingresos')),
               ],
               selected: {_filtro},
               onSelectionChanged: (s) => _cambiarFiltro(s.first),

@@ -54,5 +54,9 @@ void main() {
       expect(restaurado.comentario, 'Almuerzo');
       expect(restaurado.fecha, DateTime(2026, 8, 3, 13, 30));
     });
+
+    test(' TipoMovimiento.ahorro se muestra como Ingresos', () {
+      expect(TipoMovimiento.ahorro.nombre, 'Ingresos');
+    });
   });
 }
